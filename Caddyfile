@@ -1,12 +1,14 @@
-# Substitua pelos seus domínios reais
-# Exemplo: app.meudominio.com e api.meudominio.com
+{
+    # Opcional, mas recomendado: adicione seu e-mail para notificações do certificado SSL
+    email seu-email@exemplo.com
+}
 
-app.seusite.com {
-    # Redireciona o tráfego para o container do frontend
+# Subdomínio para a aplicação Frontend (Next.js)
+app.iaanddata.perseuai.online {
     reverse_proxy frontend:3000
 }
 
-api.seusite.com {
-    # Redireciona o tráfego para o container do backend
+# Subdomínio para a API Backend (FastAPI)
+api.iaanddata.perseuai.online {
     reverse_proxy backend:8000
 }

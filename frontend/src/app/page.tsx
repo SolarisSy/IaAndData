@@ -73,6 +73,9 @@ export default function Home() {
     if (!query.trim()) return;
 
     setIsLoading(true);
+    
+    // Variável de ambiente para a URL da API
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
     const userMessage: Message = { sender: 'user', text: query };
     setMessages(prevMessages => [...prevMessages, userMessage]);
@@ -83,14 +86,14 @@ export default function Home() {
     const containsKeyword = keywords.some(keyword => query.toLowerCase().includes(keyword));
     const tickerMatch = query.match(/([A-Z0-9]+\.SA)/i);
 
-    let apiEndpoint = 'http://127.0.0.1:8000/api/v1/query';
+    let apiEndpoint = `${API_BASE_URL}/api/v1/query`;
     let requestBody: QueryRequestBody | null = { question: query, session_id: sessionId };
     let requestMethod = 'POST';
 
     // Se a pergunta parece ser sobre projeção e contém um ticker, use o endpoint direto.
     if (containsKeyword && tickerMatch) {
       const ticker = tickerMatch[0].toUpperCase();
-      apiEndpoint = `http://127.0.0.1:8000/api/v1/volatility-cone/${ticker}`;
+      apiEndpoint = `${API_BASE_URL}/api/v1/volatility-cone/${ticker}`;
       requestBody = null; // GET request não tem corpo
       requestMethod = 'GET';
       console.log(`Chamada direta para o projeção: ${apiEndpoint}`);

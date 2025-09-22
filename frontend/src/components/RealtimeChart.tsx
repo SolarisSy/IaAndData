@@ -21,6 +21,9 @@ const RealtimeChart = ({ ticker, isActive }: RealtimeChartProps) => {
   const [status, setStatus] = useState('Aguardando ativação...');
   const chartRef = useRef(null);
 
+  // Variável de ambiente para a URL da API
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
   useEffect(() => {
     // Se o gráfico não estiver ativo, não faça nada e limpe qualquer intervalo existente.
     if (!isActive) {
@@ -31,7 +34,7 @@ const RealtimeChart = ({ ticker, isActive }: RealtimeChartProps) => {
     const fetchData = async () => {
       setStatus('Carregando dados...');
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/intraday/${ticker}`);
+        const response = await fetch(`${API_BASE_URL}/api/v1/intraday/${ticker}`);
         
         if (!response.ok) {
           const errorData = await response.json();
