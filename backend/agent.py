@@ -7,19 +7,22 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import tool, AgentExecutor, create_openai_tools_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
+from datetime import datetime, timedelta
 
 # --- 1. Importar a configuração centralizada ---
 from .config import supabase
 
 # --- 2. Definição das Ferramentas (Tools) ---
 @tool
-def get_stock_data(ticker: str):
+def get_stock_data(ticker: str, start_date: str | None = None, end_date: str | None = None):
     """
-    Busca os dados históricos de uma ação (OHLCV) no banco de dados.
-    Use esta ferramenta quando precisar de informações sobre preços de ações, como preço de fechamento, abertura, máxima, mínima ou volume.
-    O ticker deve ser o código da ação na bolsa brasileira, como 'PETR4.SA' ou 'VALE3.SA'.
+    Busca dados históricos de uma ação (OHLCV) no banco de dados.
+    Pode filtrar por um período específico usando start_date e end_date (formato: 'AAAA-MM-DD').
+    Retorna também o 'volume_financeiro' (Preço de Fechamento * Volume).
+    Use esta ferramenta para perguntas sobre preços, volumes ou performance de ações em datas específicas ou intervalos.
+    O ticker deve ser o código da ação na bolsa brasileira, como 'PETR4.SA'.
     """
-    print(f"🤖 Ferramenta 'get_stock_data' chamada com o ticker: {ticker}")
+    print(f"🤖 Ferramenta 'get_stock_data' chamada com ticker: {ticker}, start_date: {start_date}, end_date: {end_date}")
     
     # Adiciona robustez para limpar a entrada do ticker
     match = re.search(r"([A-Z0-9]+\.SA)", str(ticker).upper())
@@ -31,11 +34,25 @@ def get_stock_data(ticker: str):
     print(f"✨ Ticker limpo para a consulta: {cleaned_ticker}")
     
     try:
-        response = supabase.table('acoes_historico').select("date, open, high, low, close, volume").eq('ticker', cleaned_ticker).order('date', desc=True).limit(100).execute() # Limita a 100 registros para não sobrecarregar
+        query = supabase.table('acoes_historico').select("date, open, high, low, close, volume").eq('ticker', cleaned_ticker)
+
+        # Aplica os filtros de data se forem fornecidos
+        if start_date:
+            query = query.gte('date', start_date)
+        if end_date:
+            query = query.lte('date', end_date)
+
+        # Ordena por data e executa a consulta
+        response = query.order('date', desc=True).limit(252).execute() # Limita a 1 ano de dados por consulta
+
         if response.data:
-            return response.data
+            # Usa pandas para calcular o volume financeiro
+            df = pd.DataFrame(response.data)
+            df['volume_financeiro'] = df['close'] * df['volume']
+            # Retorna como uma lista de dicionários
+            return df.to_dict(orient='records')
         else:
-            return f"Nenhum dado encontrado para o ticker {cleaned_ticker}."
+            return f"Nenhum dado encontrado para o ticker {cleaned_ticker} no período especificado."
     except Exception as e:
         return f"Ocorreu um erro ao buscar os dados: {e}"
 
@@ -110,6 +127,117 @@ def get_volatility_cone(ticker: str, days_to_predict: int = 30):
         return f"Ocorreu um erro ao calcular o cone de volatilidade: {e}"
 
 
+@tool
+def get_market_summary(date: str):
+    """
+    Calcula o volume financeiro total negociado em um dia específico, somando o volume de todas as ações disponíveis no banco de dados.
+    Use esta ferramenta quando a pergunta for sobre o mercado em geral, como 'volume total da bolsa' ou 'volume negociado na B3' em uma data específica.
+    A data deve estar no formato 'AAAA-MM-DD'.
+    """
+    print(f"🤖 Ferramenta 'get_market_summary' chamada para a data: {date}")
+    
+    try:
+        # Busca todas as ações para a data especificada
+        response = supabase.table('acoes_historico').select("close, volume") \
+            .eq('date', date) \
+            .execute()
+
+        if not response.data:
+            return f"Nenhum dado de mercado encontrado para a data {date}."
+
+        # Usa pandas para os cálculos
+        df = pd.DataFrame(response.data)
+        
+        # Garante que não há valores nulos que possam quebrar o cálculo
+        df.dropna(subset=['close', 'volume'], inplace=True)
+
+        if df.empty:
+            return f"Os dados para {date} estão incompletos e não foi possível calcular o volume."
+
+        # Calcula o volume financeiro total
+        total_volume_financeiro = (df['close'] * df['volume']).sum()
+        
+        # Formata o resultado para melhor legibilidade
+        formatted_volume = f"R$ {total_volume_financeiro:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        return {
+            "date": date,
+            "total_volume_financeiro": formatted_volume,
+            "tickers_considerados": len(df),
+            "analysis": f"O volume financeiro total negociado em {date}, com base em {len(df)} tickers, foi de {formatted_volume}."
+        }
+        
+    except Exception as e:
+        return f"Ocorreu um erro ao calcular o resumo do mercado: {e}"
+
+
+@tool
+def get_top_stocks_by_criteria(start_date: str, end_date: str, criteria: str = 'volume_financeiro', top_n: int = 5):
+    """
+    Analisa todas as ações em um período e retorna um ranking das 'top_n' melhores com base em um critério.
+    Use esta ferramenta para perguntas comparativas ou de ranking, como 'qual ação teve o maior volume' ou 'quais as 5 ações com maior volume financeiro'.
+    O critério pode ser 'volume_financeiro' ou 'volume'.
+    As datas devem estar no formato 'AAAA-MM-DD'.
+    """
+    print(f"🤖 Ferramenta 'get_top_stocks_by_criteria' chamada com: start_date={start_date}, end_date={end_date}, criteria={criteria}, top_n={top_n}")
+
+    if criteria not in ['volume_financeiro', 'volume']:
+        return f"Critério '{criteria}' inválido. Use 'volume_financeiro' ou 'volume'."
+
+    try:
+        # Busca dados de todas as ações no período
+        response = supabase.table('acoes_historico') \
+            .select("ticker, close, volume") \
+            .gte('date', start_date) \
+            .lte('date', end_date) \
+            .execute()
+
+        if not response.data:
+            return f"Nenhum dado encontrado no período de {start_date} a {end_date}."
+
+        df = pd.DataFrame(response.data)
+        df.dropna(subset=['close', 'volume'], inplace=True)
+
+        if df.empty:
+            return "Os dados para o período estão incompletos."
+
+        # Calcula o critério para cada registro
+        if criteria == 'volume_financeiro':
+            df['criteria_value'] = df['close'] * df['volume']
+        else: # 'volume'
+            df['criteria_value'] = df['volume']
+
+        # Agrupa por ticker, soma o critério e ordena
+        ranking = df.groupby('ticker')['criteria_value'].sum().sort_values(ascending=False).head(top_n)
+
+        # Formata o resultado para a IA
+        ranking_list = []
+        for ticker, value in ranking.items():
+            formatted_value = f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if criteria == 'volume_financeiro' else f"{int(value):,}".replace(",",".")
+            ranking_list.append(f"{ticker}: {formatted_value}")
+
+        return {
+            "period": f"{start_date} a {end_date}",
+            "criteria": criteria,
+            "ranking": ranking_list,
+            "analysis": f"O ranking das {top_n} ações com maior '{criteria}' entre {start_date} e {end_date} é: {'; '.join(ranking_list)}."
+        }
+
+    except Exception as e:
+        return f"Ocorreu um erro ao gerar o ranking: {e}"
+
+
+@tool
+def get_current_date() -> str:
+    """
+    Retorna a data atual do servidor no formato 'AAAA-MM-DD'.
+    Use esta ferramenta ANTES de qualquer outra que precise de datas, sempre que a pergunta do usuário envolver termos relativos como 'hoje', 'ontem', 'última semana', 'mês passado', etc.
+    Isso ajuda a calcular os intervalos de data corretos.
+    """
+    print("🤖 Ferramenta 'get_current_date' chamada.")
+    return datetime.now().strftime('%Y-%m-%d')
+
+
 # --- 3. Montagem do Agente ---
 def create_agent_executor():
     """
@@ -117,7 +245,7 @@ def create_agent_executor():
     """
     print("🧠 Inicializando o agente...")
     
-    tools = [get_stock_data, get_volatility_cone]
+    tools = [get_stock_data, get_volatility_cone, get_market_summary, get_top_stocks_by_criteria, get_current_date]
     llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
     
     # Prompt otimizado para agentes de conversação com ferramentas
