@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copia e instala as dependências Python para aproveitar o cache do Docker
-COPY backend/requirements.txt .
+COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o restante do código da aplicação
-COPY backend/ .
+# Copia o restante do código da aplicação para um subdiretório 'backend'
+COPY backend/ ./backend/
 
 # Garante que o output do Python não fique em buffer
 ENV PYTHONUNBUFFERED=1
@@ -19,5 +19,5 @@ ENV PYTHONUNBUFFERED=1
 # Expõe a porta que a aplicação vai rodar
 EXPOSE 8000
 
-# Comando para iniciar a aplicação
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para iniciar a aplicação, referenciando o módulo corretamente
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
