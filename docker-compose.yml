@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  # --- Serviço do Backend (API FastAPI) ---
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env # Carrega as variáveis de ambiente do arquivo .env
+    expose:
+      - "8000" # Expõe a porta para outros serviços na rede Docker, mas não para o host
+    networks:
+      - iaanddata_net
+
+  # --- Serviço do Frontend (Aplicação Next.js) ---
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Passa a variável de ambiente para o Dockerfile durante a build
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - iaanddata_net
+
+  # --- Serviço de Reverse Proxy com SSL Automático (Caddy) ---
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"   # Porta HTTP
+      - "443:443" # Porta HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile # Monta o arquivo de configuração
+      - caddy_data:/data # Volume para persistir os certificados SSL
+      - caddy_config:/config
+    networks:
+      - iaanddata_net
+
+networks:
+  iaanddata_net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,12 @@
+# Substitua pelos seus domínios reais
+# Exemplo: app.meudominio.com e api.meudominio.com
+
+app.seusite.com {
+    # Redireciona o tráfego para o container do frontend
+    reverse_proxy frontend:3000
+}
+
+api.seusite.com {
+    # Redireciona o tráfego para o container do backend
+    reverse_proxy backend:8000
+}
