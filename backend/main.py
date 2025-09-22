@@ -20,6 +20,7 @@ origins = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:3001",
+    "https://app.iaanddata.perseuai.online", # Adicionado o domínio de produção do frontend
 ]
 
 app.add_middleware(
