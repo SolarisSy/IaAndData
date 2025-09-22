@@ -51,6 +51,12 @@ interface Message {
   realtimeTicker?: string | null;
 }
 
+// --- Novo: Tipagem para o corpo da requisição ---
+interface QueryRequestBody {
+  question: string;
+  session_id: string;
+}
+
 export default function Home() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([]); // Armazena todo o chat
@@ -78,7 +84,7 @@ export default function Home() {
     const tickerMatch = query.match(/([A-Z0-9]+\.SA)/i);
 
     let apiEndpoint = 'http://127.0.0.1:8000/api/v1/query';
-    let requestBody: any = { question: query, session_id: sessionId };
+    let requestBody: QueryRequestBody | null = { question: query, session_id: sessionId };
     let requestMethod = 'POST';
 
     // Se a pergunta parece ser sobre projeção e contém um ticker, use o endpoint direto.
