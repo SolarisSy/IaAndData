@@ -12,6 +12,9 @@ import {
   Tooltip,
   Legend,
   Filler,
+  ChartOptions, // Importado para tipagem forte
+  LegendItem,   // Importado para tipagem forte
+  ChartData as ChartJSData // Importado e renomeado para evitar conflito
 } from 'chart.js';
 import RealtimeChart from '@/components/RealtimeChart'; 
 
@@ -84,7 +87,7 @@ export default function Home() {
       apiEndpoint = `http://127.0.0.1:8000/api/v1/volatility-cone/${ticker}`;
       requestBody = null; // GET request não tem corpo
       requestMethod = 'GET';
-      console.log(`Chamada direta para o endpoint de projeção: ${apiEndpoint}`);
+      console.log(`Chamada direta para o projeção: ${apiEndpoint}`);
     } else {
       console.log(`Chamada para o agente de IA: ${apiEndpoint}`);
     }
@@ -118,19 +121,25 @@ export default function Home() {
       } else {
         iaMessage.text = data.answer;
         // Se a resposta não for um gráfico, mas contiver um ticker, ofereça o gráfico em tempo real
-        const tickerMatch = data.answer.match(/([A-Z0-9]+\.SA)/i);
-        if (tickerMatch) {
-          iaMessage.realtimeTicker = tickerMatch[0].toUpperCase();
+        const tickerMatchInAnswer = iaMessage.text.match(/([A-Z0-9]+\.SA)/i);
+        if (tickerMatchInAnswer) {
+          iaMessage.realtimeTicker = tickerMatchInAnswer[0].toUpperCase();
         }
       }
       
       setMessages(prevMessages => [...prevMessages, iaMessage]);
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Alterado de 'any' para 'unknown'
       console.error("Falha ao buscar dados da API", error);
+      
+      let errorMessageText = "Desculpe, ocorreu um erro inesperado.";
+      if(error instanceof Error) {
+        errorMessageText = `Desculpe, ocorreu um erro: ${error.message}`;
+      }
+
       const errorMessage: Message = {
         sender: 'ia',
-        text: `Desculpe, ocorreu um erro: ${error.message}`
+        text: errorMessageText
       };
       setMessages(prevMessages => [...prevMessages, errorMessage]);
     } finally {
@@ -138,8 +147,8 @@ export default function Home() {
     }
   };
 
-  const generateChartConfig = (data: ChartData) => {
-    const allLabels = [...data.historical.map(p => p.date), ...data.cone.map(p => p.date)];
+  const generateChartConfig = (data: ChartData): ChartJSData<'line'> => { // Adicionada tipagem de retorno
+    const allLabels = [...data.historical.map(p => p.date.split('T')[0]), ...data.cone.map(p => p.date)];
     
     const historicalClose = data.historical.map(p => p.close);
     const predictedLine = [...Array(data.historical.length).fill(null), ...data.cone.map(p => p.predicted_price)];
@@ -171,12 +180,12 @@ export default function Home() {
           data: [...Array(data.historical.length).fill(null), ...data.cone.map(p => p.upper_bound_95)],
           borderColor: 'rgba(255, 99, 132, 0.2)',
           backgroundColor: 'rgba(255, 99, 132, 0.1)',
-          fill: '+1',
+          fill: '+1', // Preenche até o próximo dataset com 'fill: false'
           tension: 0.4,
           pointRadius: 0,
         },
         {
-          label: 'Cone de Incerteza (95%)',
+          label: 'Cone de Incerteza (95%) Lower', // Label diferente para evitar conflito na legenda
           data: [...Array(data.historical.length).fill(null), ...data.cone.map(p => p.lower_bound_95)],
           borderColor: 'rgba(255, 99, 132, 0.2)',
           backgroundColor: 'rgba(255, 99, 132, 0.1)',
@@ -189,12 +198,12 @@ export default function Home() {
           data: [...Array(data.historical.length).fill(null), ...data.cone.map(p => p.upper_bound_70)],
           borderColor: 'rgba(75, 192, 192, 0.2)',
           backgroundColor: 'rgba(75, 192, 192, 0.1)',
-          fill: '+1',
+          fill: '+1', // Preenche até o próximo dataset com 'fill: false'
           tension: 0.4,
           pointRadius: 0,
         },
         {
-          label: 'Cone de Incerteza (70%)',
+          label: 'Cone de Incerteza (70%) Lower', // Label diferente
           data: [...Array(data.historical.length).fill(null), ...data.cone.map(p => p.lower_bound_70)],
           borderColor: 'rgba(75, 192, 192, 0.2)',
           backgroundColor: 'rgba(75, 192, 192, 0.1)',
@@ -206,7 +215,7 @@ export default function Home() {
     };
   };
 
-  const chartOptions = {
+  const chartOptions: ChartOptions<'line'> = { // Adicionada tipagem forte
     responsive: true,
     plugins: {
       legend: {
@@ -214,8 +223,8 @@ export default function Home() {
         labels: {
             color: '#fff',
             // Filter out duplicate legend items for the fill
-            filter: function(legendItem: any, chartData: any) {
-              return !legendItem.text.includes('Cone de Incerteza') || legendItem.datasetIndex % 2 === 0;
+            filter: function(legendItem: LegendItem) { // Adicionada tipagem e removido 'chartData' não usado
+              return !legendItem.text.includes('Lower');
             }
         }
       },
@@ -349,8 +358,8 @@ function RenderMessage({ msg, index, messages, chartOptions, generateChartConfig
   msg: Message;
   index: number;
   messages: Message[];
-  chartOptions: any; // Tipos mais específicos podem ser adicionados se necessário
-  generateChartConfig: (data: ChartData) => any; // Tipos mais específicos podem ser adicionados se necessário
+  chartOptions: ChartOptions<'line'>; // Alterado de 'any' para tipo específico
+  generateChartConfig: (data: ChartData) => ChartJSData<'line'>; // Alterado de 'any' para tipo específico
 }) {
   // Encontra o índice da última mensagem no chat que possui um gráfico em tempo real
   const lastMessageWithRealtimeChartIndex = messages.map(m => !!m.realtimeTicker).lastIndexOf(true);

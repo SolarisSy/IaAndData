@@ -41,9 +41,13 @@ const RealtimeChart = ({ ticker, isActive }: RealtimeChartProps) => {
         const data: IntradayData = await response.json();
         setChartData(data);
         setStatus(`Dados para ${ticker} atualizados`);
-      } catch (error: any) {
+      } catch (error: unknown) { // Alterado de 'any' para 'unknown'
         console.error("Erro no fetch:", error);
-        setStatus(`Erro: ${error.message}`);
+        let errorMessageText = "Erro ao buscar dados.";
+        if (error instanceof Error) {
+          errorMessageText = `Erro: ${error.message}`;
+        }
+        setStatus(errorMessageText);
       }
     };
 
