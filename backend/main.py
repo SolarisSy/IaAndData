@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import re
 
 # --- Importações centralizadas ---
 from .config import supabase
@@ -14,6 +15,15 @@ app = FastAPI(
     description="API para servir dados financeiros e insights gerados por IA.",
     version="0.1.0"
 )
+
+# --- FUNÇÃO DE PRÉ-VALIDAÇÃO ---
+def verificar_data_ambigua(texto: str) -> bool:
+    """Verifica se há datas no formato DD/MM ou DD-MM sem um ano."""
+    # Padrão para DD/MM ou DD-MM não seguido por /YYYY ou -YYYY
+    padrao = r'\b(\d{1,2}[/-]\d{1,2})(?!([/-]\d{4}))\b'
+    if re.search(padrao, texto):
+        return True
+    return False
 
 # --- Configuração do CORS ---
 origins = [
@@ -44,11 +54,18 @@ class QueryRequest(BaseModel):
 @app.post("/api/v1/query")
 def run_agent_query(request: QueryRequest):
     """
-    Recebe uma pergunta em linguagem natural e a envia para o agente de IA.
+    Recebe uma pergunta em linguagem natural e a envia para o agente de IA,
+    após passar por uma camada de pré-validação.
     """
     if not request.question:
         raise HTTPException(status_code=400, detail="A pergunta não pode estar vazia.")
     
+    # --- CAMADA DE VALIDAÇÃO ANTES DE CHAMAR O AGENTE ---
+    if verificar_data_ambigua(request.question):
+        return {
+            "answer": "Notei que a data na sua pergunta não especifica o ano. Para garantir a precisão, por favor, reformule a pergunta incluindo o ano completo (ex: '18/09/2024')."
+        }
+
     try:
         # Passa a pergunta e o ID da sessão para a função do agente
         session_id = request.session_id or "default_user"

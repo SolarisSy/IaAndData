@@ -8,6 +8,7 @@ from langchain.agents import tool, AgentExecutor, create_openai_tools_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
 from datetime import datetime, timedelta
+import pytz
 
 # --- 1. Importar a configuração centralizada ---
 from .config import supabase
@@ -20,10 +21,10 @@ def get_stock_data(ticker: str, start_date: str | None = None, end_date: str | N
     Pode filtrar por um período específico usando start_date e end_date (formato: 'AAAA-MM-DD').
     Retorna também o 'volume_financeiro' (Preço de Fechamento * Volume).
     Use esta ferramenta para perguntas sobre preços, volumes ou performance de ações em datas específicas ou intervalos.
-    O ticker deve ser o código da ação na bolsa brasileira, como 'PETR4.SA'.
+    O ticker deve ser o código da ação na bolsa brasileira, como 'PETR.SA'.
     """
     print(f"🤖 Ferramenta 'get_stock_data' chamada com ticker: {ticker}, start_date: {start_date}, end_date: {end_date}")
-    
+
     # Adiciona robustez para limpar a entrada do ticker
     match = re.search(r"([A-Z0-9]+\.SA)", str(ticker).upper())
     if match:
@@ -135,7 +136,7 @@ def get_market_summary(date: str):
     A data deve estar no formato 'AAAA-MM-DD'.
     """
     print(f"🤖 Ferramenta 'get_market_summary' chamada para a data: {date}")
-    
+
     try:
         # Busca todas as ações para a data especificada
         response = supabase.table('acoes_historico').select("close, volume") \
@@ -228,14 +229,24 @@ def get_top_stocks_by_criteria(start_date: str, end_date: str, criteria: str = '
 
 
 @tool
-def get_current_date() -> str:
-    """
-    Retorna a data atual do servidor no formato 'AAAA-MM-DD'.
-    Use esta ferramenta ANTES de qualquer outra que precise de datas, sempre que a pergunta do usuário envolver termos relativos como 'hoje', 'ontem', 'última semana', 'mês passado', etc.
-    Isso ajuda a calcular os intervalos de data corretos.
-    """
-    print("🤖 Ferramenta 'get_current_date' chamada.")
-    return datetime.now().strftime('%Y-%m-%d')
+def get_current_datetime() -> str:
+    """Retorna a data e hora atuais no fuso horário de São Paulo (America/Sao_Paulo), incluindo o dia da semana. Formato: 'YYYY-MM-DD HH:MM:SS (Dia da Semana)'."""
+    sao_paulo_tz = pytz.timezone("America/Sao_Paulo")
+    now_sp = datetime.now(sao_paulo_tz)
+    # Mapeia os dias da semana em inglês para português
+    dias_semana = {
+        'Monday': 'Segunda-feira',
+        'Tuesday': 'Terça-feira',
+        'Wednesday': 'Quarta-feira',
+        'Thursday': 'Quinta-feira',
+        'Friday': 'Sexta-feira',
+        'Saturday': 'Sábado',
+        'Sunday': 'Domingo'
+    }
+    dia_semana_en = now_sp.strftime('%A')
+    dia_semana_pt = dias_semana[dia_semana_en]
+    
+    return f"{now_sp.strftime('%Y-%m-%d %H:%M:%S')} ({dia_semana_pt})"
 
 
 # --- 3. Montagem do Agente ---
@@ -245,12 +256,34 @@ def create_agent_executor():
     """
     print("🧠 Inicializando o agente...")
     
-    tools = [get_stock_data, get_volatility_cone, get_market_summary, get_top_stocks_by_criteria, get_current_date]
-    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+    tools = [get_stock_data, get_volatility_cone, get_market_summary, get_top_stocks_by_criteria, get_current_datetime]
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
+    # 1. Escolha do LLM (gpt-4o-mini é uma excelente escolha para performance/custo)
+    # 2. Lista de ferramentas que o agente pode usar
+    # 3. Definição do Prompt (instruções para o agente)
+    # Injetando a data e hora atuais diretamente no prompt do sistema
+    sao_paulo_tz = pytz.timezone("America/Sao_Paulo")
+    now_sp = datetime.now(sao_paulo_tz)
+    dias_semana = {
+        'Monday': 'Segunda-feira', 'Tuesday': 'Terça-feira', 'Wednesday': 'Quarta-feira',
+        'Thursday': 'Quinta-feira', 'Friday': 'Sexta-feira', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+    }
+    dia_semana_en = now_sp.strftime('%A')
+    dia_semana_pt = dias_semana[dia_semana_en]
+    current_time_str = f"{now_sp.strftime('%Y-%m-%d %H:%M:%S')} ({dia_semana_pt})"
+    
+    system_prompt = f"""Você é um assistente especialista em dados financeiros do mercado brasileiro.
+A data e hora atuais são: {current_time_str}. Use essa informação como referência para qualquer pergunta sobre datas relativas (como 'hoje' ou 'ontem').
+
+Seu objetivo é ser preciso и prestativo.
+- Sempre que uma ferramenta retornar "Nenhum dado encontrado" para uma data específica, sua primeira hipótese deve ser que a data caiu em um fim de semana ou feriado.
+- Nesse caso, informe ao usuário sobre essa possibilidade e, se possível, ofereça buscar pelo dia útil anterior ou seguinte.
+- Se a pergunta do usuário for um cumprimento ou uma conversa fiada, responda educadamente sem usar ferramentas."""
+
     # Prompt otimizado para agentes de conversação com ferramentas
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Você é um assistente prestativo especialista em dados financeiros. Se a pergunta do usuário for um cumprimento ou uma conversa fiada, responda educadamente sem usar ferramentas."),
+        ("system", system_prompt),
         MessagesPlaceholder(variable_name="chat_history"), # <-- Importante para a memória
         ("user", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
