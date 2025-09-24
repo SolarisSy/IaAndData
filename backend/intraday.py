@@ -43,6 +43,10 @@ def get_intraday_data_with_vwap(ticker: str):
         # E se o primeiro valor for None, preenchemos com o próximo
         hist.bfill(inplace=True)
 
+        # Opcional: Adicionar a configuração para silenciar explicitamente futuros avisos do pandas
+        # Isso pode ser útil se outras operações no futuro gerarem avisos semelhantes.
+        pd.set_option('future.no_silent_downcasting', True)
+
         # Preparar dados para o frontend
         hist.reset_index(inplace=True)
         

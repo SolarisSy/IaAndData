@@ -17,6 +17,7 @@ import {
   ChartData as ChartJSData // Importado e renomeado para evitar conflito
 } from 'chart.js';
 import RealtimeChart from '@/components/RealtimeChart'; 
+import ReactMarkdown from 'react-markdown'; // Importa o componente
 
 ChartJS.register(
   CategoryScale,
@@ -376,7 +377,9 @@ function RenderMessage({ msg, index, messages, chartOptions, generateChartConfig
   return (
     <div key={index} className={`mb-6 flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div className={`p-4 rounded-lg max-w-xl ${msg.sender === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-        <p className="text-gray-100 whitespace-pre-wrap">{msg.text}</p>
+        <div className="text-gray-100 whitespace-pre-wrap">
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        </div>
         
         {msg.chartData && (
           <div className="bg-gray-800 p-4 rounded-lg border border-gray-600 mt-4">

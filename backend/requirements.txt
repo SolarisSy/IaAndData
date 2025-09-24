@@ -4,9 +4,10 @@ python-dotenv
 supabase
 langchain
 langchain-openai
-openai
-python-multipart
 numpy
-scikit-learn
 pandas
+scikit-learn
+pytz
+requests
+pandas-ta
 yfinance

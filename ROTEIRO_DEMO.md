@@ -70,4 +70,26 @@ Estas perguntas são mais abertas. A IA responderá com texto, mas a interface i
 *   `Qual a cotação mais recente que você tem para a ITUB4.SA?` (A IA dará o último preço do banco de dados, mas o sistema mostrará o gráfico com a cotação do minuto).
 *   `O que você sabe sobre a ABEV3.SA?`
 
+---
+
+### Parte 5: Análise Sênior (Insights e Comparações)
+
+**Objetivo:** Testar as novas capacidades de raciocínio multi-etapas e as ferramentas de análise avançada do agente.
+
+#### Análise Técnica de Ativo Único
+*   `A PETR4.SA está atualmente sobrecomprada ou sobrevendida?`
+    *   **O que demonstra:** Força o uso da ferramenta `get_asset_analytics` para buscar e interpretar o indicador RSI.
+*   `O preço atual da VALE3.SA está acima ou abaixo da sua média móvel de 21 dias?`
+    *   **O que demonstra:** Força o uso da `get_asset_analytics` para calcular a SMA e comparar o resultado com o preço de fechamento mais recente.
+
+#### Análise Comparativa Complexa
+*   `Compare a performance e a volatilidade da MGLU3.SA e da ABEV3.SA desde o início de 2023.`
+    *   **O que demonstra:** Força o uso da ferramenta `compare_assets`, que por sua vez chama `get_stock_data` duas vezes, para consolidar e analisar múltiplos ativos.
+*   `Quais foram as 3 ações com maior volume financeiro no último trimestre e qual delas teve a melhor performance no período?`
+    *   **O que demonstra:** Raciocínio em duas etapas. A IA deve primeiro usar `get_top_stocks_by_criteria` para identificar os ativos e, em seguida, usar `compare_assets` para analisar a performance desses ativos.
+
+#### Teste do Mecanismo de Feedback
+*   `Qual a relação entre o volume de negociação da PETR4.SA e o preço do barril de petróleo?`
+    *   **O que demonstra:** A capacidade da IA de reconhecer os limites de suas ferramentas. Ela deve concluir que não pode responder, usar a ferramenta `notify_developer_of_missing_tool` para enviar uma notificação ao Discord, e informar ao usuário sobre a ação tomada.
+
 Seguir este roteiro garantirá uma demonstração fluida, lógica e que destaca cada camada de inteligência que construímos no projeto IaAndData.

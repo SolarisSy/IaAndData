@@ -7,7 +7,8 @@ import re
 
 # --- Importações centralizadas ---
 from .config import supabase
-from .agent import query_agent, get_volatility_cone
+from .agent import query_agent
+from .tools.data_retrieval_tools import get_volatility_cone
 from .intraday import get_intraday_data_with_vwap
 
 app = FastAPI(
